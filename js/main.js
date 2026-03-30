@@ -30,6 +30,7 @@ const gameoverTitle = document.getElementById('gameover-title');
 const gameoverSubtitle = document.getElementById('gameover-subtitle');
 const newGameBtn = document.getElementById('new-game-btn');
 const resetBtn = document.getElementById('reset-btn');
+const undoBtn = document.getElementById('undo-btn');
 
 // --- Helpers ---
 function generateGameId() {
@@ -479,9 +480,43 @@ resetBtn.addEventListener('click', () => {
   chess.reset();
   lastMove = null;
   deselect();
-  gameStatus = 'active'; // Or 'waiting' if you want it to be joinable again? Let's keep it 'active'
+  gameStatus = 'active'; 
 
-  sendMove(gameId, '', 'active').catch(console.error);
+  sendMove(gameId, '', 'active').catch(err => {
+    console.error('Failed to reset game:', err);
+    alert('Oops! Reset failed to sync. Check your connection.');
+  });
+
+  draw();
+  updateUI();
+});
+
+undoBtn.addEventListener('click', () => {
+  if (playerColor === 'spectator') return;
+  if (chess.game_over()) {
+    // If game was over, we might need a confirmation or special handling
+    // For now, let's just let them undo.
+  }
+
+  const move = chess.undo();
+  if (!move) return; // No moves to undo
+
+  // Recalculate lastMove
+  const history = chess.history({ verbose: true });
+  if (history.length > 0) {
+    const prev = history[history.length - 1];
+    lastMove = { from: prev.from, to: prev.to };
+  } else {
+    lastMove = null;
+  }
+
+  deselect();
+  const movesStr = getMovesString();
+  const status = computeStatus();
+
+  sendMove(gameId, movesStr, status).catch(error => {
+    console.error('Failed to undo move:', error);
+  });
 
   draw();
   updateUI();
