@@ -29,6 +29,7 @@ const gameoverDialog = document.getElementById('gameover-dialog');
 const gameoverTitle = document.getElementById('gameover-title');
 const gameoverSubtitle = document.getElementById('gameover-subtitle');
 const newGameBtn = document.getElementById('new-game-btn');
+const resetBtn = document.getElementById('reset-btn');
 
 // --- Helpers ---
 function generateGameId() {
@@ -284,8 +285,23 @@ function onRemoteUpdate(data) {
   const remoteMoves = data.moves ? data.moves.split('|').filter(m => m) : [];
   const localCount = chess.history().length;
 
+  // Detect reset (remote has fewer moves than local)
+  if (remoteMoves.length < localCount) {
+    chess.reset();
+    lastMove = null;
+    deselect();
+    // Replay any moves that might still be in remote (e.g., if it wasn't a full reset)
+    for (const uci of remoteMoves) {
+      const from = uci.substring(0, 2);
+      const to = uci.substring(2, 4);
+      const promotion = uci.length > 4 ? uci[4] : undefined;
+      const move = chess.move({ from, to, promotion });
+      if (move) lastMove = { from: move.from, to: move.to };
+    }
+    draw();
+  } 
   // Apply new moves
-  if (remoteMoves.length > localCount) {
+  else if (remoteMoves.length > localCount) {
     for (let i = localCount; i < remoteMoves.length; i++) {
       const uci = remoteMoves[i];
       const from = uci.substring(0, 2);
@@ -454,6 +470,21 @@ copyBtn.addEventListener('click', () => {
 
 newGameBtn.addEventListener('click', () => {
   window.location.href = window.location.pathname;
+});
+
+resetBtn.addEventListener('click', () => {
+  if (playerColor === 'spectator') return;
+  if (!window.confirm('Reset the board? This will clear all moves for BOTH players.')) return;
+
+  chess.reset();
+  lastMove = null;
+  deselect();
+  gameStatus = 'active'; // Or 'waiting' if you want it to be joinable again? Let's keep it 'active'
+
+  sendMove(gameId, '', 'active').catch(console.error);
+
+  draw();
+  updateUI();
 });
 
 // Start
