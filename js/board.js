@@ -25,8 +25,9 @@ export function renderBoard(boardEl, chess, playerColor, selectedSquare, legalMo
   boardEl.innerHTML = '';
 
   const board = chess.board();
-  const rows = playerColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
-  const cols = playerColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+  const isFlipped = playerColor === 'b';
+  const rows = isFlipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const cols = isFlipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
 
   for (const r of rows) {
     for (const c of cols) {

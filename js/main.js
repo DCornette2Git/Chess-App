@@ -102,10 +102,14 @@ function updateUI() {
   // Captured pieces
   const captured = getCapturedPieces(chess);
   const opponentColor = playerColor === 'w' ? 'b' : 'w';
-  capturedByPlayer.textContent = captured[opponentColor]
-    .map(t => getPieceSymbol(opponentColor, t)).join(' ');
-  capturedByOpponent.textContent = captured[playerColor]
-    .map(t => getPieceSymbol(playerColor, t)).join(' ');
+
+  // Opponent's pieces you have taken
+  capturedByPlayer.innerHTML = captured[opponentColor]
+    .map(t => `<span class="${opponentColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(opponentColor, t)}</span>`).join(' ');
+
+  // Your pieces that have been taken
+  capturedByOpponent.innerHTML = captured[playerColor]
+    .map(t => `<span class="${playerColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(playerColor, t)}</span>`).join(' ');
 
   // Move history
   const history = chess.history();
@@ -128,12 +132,15 @@ function updateUI() {
 
   // Player labels
   if (playerColor) {
-    const colorName = playerColor === 'w' ? 'White' : 'Black';
-    const oppName = playerColor === 'w' ? 'Black' : 'White';
+    const isSpectator = playerColor === 'spectator';
+    const colorName = playerColor === 'w' ? 'White' : (playerColor === 'b' ? 'Black' : 'Spectator');
+    const oppName = playerColor === 'w' ? 'Black' : (playerColor === 'b' ? 'White' : 'Both Players');
+
     playerColorLabel.textContent = colorName;
-    playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : 'text-gray-300'}`;
-    playerName.textContent = `You (${colorName})`;
-    opponentName.textContent = oppName;
+    playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : (playerColor === 'b' ? 'text-gray-300' : 'text-violet-400')}`;
+
+    playerName.textContent = isSpectator ? 'Spectating View' : `You (${colorName})`;
+    opponentName.textContent = isSpectator ? 'Active Game' : oppName;
   }
 
   // Game over dialog
@@ -222,15 +229,25 @@ function afterMove(move) {
   lastMove = { from: move.from, to: move.to };
 
   const movesStr = getMovesString();
-  const status = computeStatus();
-  gameStatus = status === 'checkmate' || status === 'stalemate' || status === 'draw'
-    ? status : gameStatus;
+  const computedStatus = computeStatus();
 
-  sendMove(gameId, movesStr, status).catch(err => {
+  // Keep 'waiting' status even after white's move, until opponent joins
+  let syncStatus = computedStatus;
+  if (computedStatus === 'active' && gameStatus === 'waiting') {
+    syncStatus = 'waiting';
+  }
+
+  // Update local gameStatus only if it's a terminals state
+  if (['checkmate', 'stalemate', 'draw'].includes(computedStatus)) {
+    gameStatus = computedStatus;
+    syncStatus = computedStatus;
+  }
+
+  sendMove(gameId, movesStr, syncStatus).catch(err => {
     console.error('Failed to send move:', err);
     statusEl.textContent = 'Sync error — retrying…';
     // Retry once
-    setTimeout(() => sendMove(gameId, movesStr, status).catch(console.error), 2000);
+    setTimeout(() => sendMove(gameId, movesStr, syncStatus).catch(console.error), 2000);
   });
 
   draw();
@@ -251,7 +268,7 @@ function showPromotionDialog(from, to) {
     btn.title = names[i];
     const span = document.createElement('span');
     span.textContent = getPieceSymbol(playerColor, p);
-    span.className = 'text-4xl select-none';
+    span.className = `text-4xl select-none ${playerColor === 'w' ? 'text-white' : 'text-white/40'}`;
     btn.appendChild(span);
     btn.addEventListener('click', () => {
       promotionDialog.classList.add('hidden');
@@ -382,8 +399,22 @@ async function init() {
       }
       gameStatus = 'active';
     } else {
-      // Game is active and we have no saved color — spectator
-      playerColor = 'spectator';
+      // If status is active but no moves made yet, allow joining as black
+      const moveCount = (game.moves || '').split('|').filter(m => m).length;
+      if (moveCount === 0 || moveCount === 1) {
+        // This handles cases where white already moved but black is just now clicking the link
+        playerColor = 'b';
+        localStorage.setItem(`chess_${gameId}`, 'b');
+        try {
+          await joinGame(gameId);
+        } catch (err) {
+          console.error('Failed to join game:', err);
+        }
+        gameStatus = 'active';
+      } else {
+        // Game definitely in progress with multiple moves — spectator
+        playerColor = 'spectator';
+      }
     }
 
     gameStatus = game.status;
