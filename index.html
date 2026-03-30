@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Arena — Real-Time Multiplayer</title>
+  <meta name="description" content="Play chess with a friend in real-time. Share a link to start a game instantly.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v3 Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Chess.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+  <!-- Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Background gradient */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 40%, #1e1b4b 0%, #0c0c14 65%);
+      z-index: -1;
+    }
+
+    /* Board entry animation */
+    @keyframes boardFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    #board-wrapper { animation: boardFadeIn 0.6s ease-out both; }
+
+    /* Banner slide */
+    #share-banner {
+      transform: translateY(-100%);
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Glass panel */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Square hover */
+    .square:hover { filter: brightness(1.1); }
+
+    /* Scrollbar */
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+    /* Pulse dot */
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .live-dot { animation: livePulse 2s ease-in-out infinite; }
+
+    /* Game over fade in */
+    @keyframes overlayIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes dialogPop {
+      from { opacity: 0; transform: scale(0.9) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .overlay-animate { animation: overlayIn 0.3s ease-out both; }
+    .dialog-animate { animation: dialogPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+  </style>
+</head>
+<body class="min-h-screen text-white font-sans antialiased overflow-x-hidden">
+
+  <!-- ─── Share Banner ─── -->
+  <div id="share-banner" class="hidden fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-violet-600/90 to-indigo-600/90 backdrop-blur-sm border-b border-white/10 py-3 px-6">
+    <div class="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3">
+      <span class="text-sm text-white/90 font-medium whitespace-nowrap">🔗 Share this link with your opponent:</span>
+      <div class="flex items-center gap-2 w-full max-w-md">
+        <input id="share-link" readonly
+          class="flex-1 bg-white/10 rounded-lg px-3 py-1.5 text-sm text-white border border-white/20 outline-none focus:border-white/40 font-mono" />
+        <button id="copy-btn"
+          class="bg-white/20 hover:bg-white/30 active:scale-95 rounded-lg px-4 py-1.5 text-sm font-medium transition-all cursor-pointer select-none">
+          Copy
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Main Layout ─── -->
+  <main class="flex items-center justify-center min-h-screen p-4 pt-20">
+    <div class="flex flex-col lg:flex-row items-center lg:items-stretch gap-6 max-w-[1100px]">
+
+      <!-- Left Panel: Game Info -->
+      <aside class="glass-panel w-64 p-5 flex flex-col gap-4 shrink-0">
+        <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">
+          ♟ Chess Arena
+        </h1>
+
+        <div class="space-y-3">
+          <div>
+            <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Status</span>
+            <p id="game-status" class="text-sm font-medium text-white/70 mt-0.5">Initializing…</p>
+          </div>
+          <div>
+            <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Turn</span>
+            <p id="turn-indicator" class="text-sm font-medium text-white/60 mt-0.5">—</p>
+          </div>
+          <div>
+            <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">You Play</span>
+            <p id="player-color-label" class="text-sm font-semibold mt-0.5">—</p>
+          </div>
+        </div>
+
+        <hr class="border-white/10">
+
+        <div>
+          <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Captured by You</span>
+          <div id="captured-by-player" class="text-xl mt-1 min-h-[1.75rem] leading-tight"></div>
+        </div>
+        <div>
+          <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Captured by Opponent</span>
+          <div id="captured-by-opponent" class="text-xl mt-1 min-h-[1.75rem] leading-tight"></div>
+        </div>
+      </aside>
+
+      <!-- Center: Board -->
+      <div id="board-wrapper" class="flex flex-col items-center">
+        <!-- Opponent bar -->
+        <div id="opponent-bar" class="w-full flex items-center gap-2.5 mb-2 px-1">
+          <div class="w-2.5 h-2.5 rounded-full bg-white/30"></div>
+          <span id="opponent-name" class="text-sm font-medium text-white/50">Opponent</span>
+        </div>
+
+        <!-- Board -->
+        <div id="board"
+          class="grid grid-cols-8 aspect-square rounded-xl overflow-hidden shadow-[0_0_80px_rgba(99,102,241,0.12)] border border-white/10"
+          style="width: min(480px, calc(100vw - 2rem)); height: min(480px, calc(100vw - 2rem)); grid-template-rows: repeat(8, 1fr);">
+          <!-- Rendered by JS -->
+        </div>
+
+        <!-- Player bar -->
+        <div id="player-bar" class="w-full flex items-center gap-2.5 mt-2 px-1">
+          <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 live-dot"></div>
+          <span id="player-name" class="text-sm font-medium text-white/90">You</span>
+        </div>
+      </div>
+
+      <!-- Right Panel: Move History -->
+      <aside class="glass-panel w-64 p-5 flex flex-col shrink-0" style="max-height: 560px;">
+        <h2 class="text-sm font-bold tracking-tight text-white/80 mb-3">Move History</h2>
+        <div id="move-history" class="flex-1 overflow-y-auto custom-scroll">
+          <p class="text-white/30 text-xs italic">No moves yet</p>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- ─── Promotion Dialog ─── -->
+  <div id="promotion-dialog" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 backdrop-blur-sm overlay-animate">
+    <div class="bg-[#1a1a2e] rounded-2xl p-6 border border-white/15 shadow-2xl dialog-animate">
+      <p class="text-center text-sm text-white/50 mb-4 font-medium">Promote pawn to:</p>
+      <div id="promotion-pieces" class="flex gap-3">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Game Over Dialog ─── -->
+  <div id="gameover-dialog" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 backdrop-blur-sm overlay-animate">
+    <div class="bg-[#1a1a2e] rounded-2xl p-8 border border-white/15 shadow-2xl text-center dialog-animate max-w-sm mx-4">
+      <div class="text-5xl mb-3">👑</div>
+      <h2 id="gameover-title" class="text-2xl font-bold mb-1"></h2>
+      <p id="gameover-subtitle" class="text-white/50 mb-6"></p>
+      <button id="new-game-btn"
+        class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 px-6 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-violet-600/25">
+        New Game
+      </button>
+    </div>
+  </div>
+
+  <!-- App -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
