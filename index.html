@@ -213,7 +213,26 @@
     </div>
   </div>
 
+  <!-- ─── Reset Confirmation Modal ─── -->
+  <div id="reset-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/70 backdrop-blur-md overlay-animate">
+    <div class="bg-[#1a1a2e] rounded-2xl p-8 border border-red-500/20 shadow-2xl text-center dialog-animate max-w-sm mx-4">
+      <div class="text-5xl mb-3">⚠️</div>
+      <h2 class="text-xl font-bold mb-2">Reset the Board?</h2>
+      <p class="text-white/50 mb-6 text-sm">This will clear all moves for BOTH players. This action cannot be undone.</p>
+      <div class="flex gap-3">
+        <button id="cancel-reset-btn"
+          class="flex-1 bg-white/10 hover:bg-white/20 px-4 py-2.5 rounded-xl font-medium transition-all cursor-pointer">
+          Cancel
+        </button>
+        <button id="confirm-reset-btn"
+          class="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-red-600/25">
+          Reset Now
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- App -->
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=2.2"></script>
 </body>
 </html>

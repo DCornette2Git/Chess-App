@@ -31,6 +31,9 @@ const gameoverSubtitle = document.getElementById('gameover-subtitle');
 const newGameBtn = document.getElementById('new-game-btn');
 const resetBtn = document.getElementById('reset-btn');
 const undoBtn = document.getElementById('undo-btn');
+const resetModal = document.getElementById('reset-modal');
+const confirmResetBtn = document.getElementById('confirm-reset-btn');
+const cancelResetBtn = document.getElementById('cancel-reset-btn');
 
 // --- Helpers ---
 function generateGameId() {
@@ -480,22 +483,35 @@ document.addEventListener('click', (e) => {
   }
 
   if (targetId === 'reset-btn') {
+    console.log('Reset button clicked. Role:', playerColor);
     if (playerColor === 'spectator') {
       alert('Spectators cannot reset the game.');
       return;
     }
-    if (!window.confirm('Reset the board? This will clear all moves for BOTH players.')) return;
+    // Show custom modal instead of window.confirm
+    resetModal.classList.remove('hidden');
+    resetModal.classList.add('flex');
+  }
 
-    console.log('Triggering global reset...');
+  if (targetId === 'cancel-reset-btn') {
+    resetModal.classList.add('hidden');
+    resetModal.classList.remove('flex');
+  }
+
+  if (targetId === 'confirm-reset-btn') {
+    console.log('Reset confirmed by user.');
+    resetModal.classList.add('hidden');
+    resetModal.classList.remove('flex');
+
     chess.reset();
     lastMove = null;
     deselect();
     gameStatus = 'active';
 
     sendMove(gameId, '', 'active').then(() => {
-      console.log('Reset successful');
+      console.log('Global reset successfully synced to Supabase.');
     }).catch(err => {
-      console.error('Reset failed:', err);
+      console.error('Network Error: Reset failed to sync:', err);
     });
 
     draw();
