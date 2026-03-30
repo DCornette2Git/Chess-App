@@ -141,6 +141,8 @@ function updateUI() {
     playerColorLabel.textContent = colorName;
     playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : (playerColor === 'b' ? 'text-gray-300' : 'text-violet-400')}`;
 
+    console.log('Role identified:', playerColor); // Debug log
+
     playerName.textContent = isSpectator ? 'Spectating View' : `You (${colorName})`;
     opponentName.textContent = isSpectator ? 'Active Game' : oppName;
   }
@@ -457,81 +459,74 @@ async function init() {
   updateUI();
 }
 
-// --- Event listeners ---
-copyBtn.addEventListener('click', () => {
-  navigator.clipboard.writeText(shareLink.value).then(() => {
-    copyBtn.textContent = 'Copied!';
-    copyBtn.classList.add('bg-emerald-500/30');
-    setTimeout(() => {
-      copyBtn.textContent = 'Copy';
-      copyBtn.classList.remove('bg-emerald-500/30');
-    }, 2000);
-  });
-});
+// --- Event listeners (Global Delegate for robustness) ---
+document.addEventListener('click', (e) => {
+  const targetId = e.target.closest('button')?.id;
+  if (!targetId) return;
 
-newGameBtn.addEventListener('click', () => {
-  window.location.href = window.location.pathname;
-});
-
-resetBtn.addEventListener('click', () => {
-  // If playerColor is null, we assume they are the host or haven't been assigned yet, so allow reset
-  if (playerColor === 'spectator') {
-    alert('Spectators cannot reset the game.');
-    return;
-  }
-  
-  if (!window.confirm('Reset the board? This will clear all moves for BOTH players.')) return;
-
-  console.log('Resetting board globally...');
-  chess.reset();
-  lastMove = null;
-  deselect();
-  gameStatus = 'active'; 
-
-  // Wipe moves and set status back to active
-  sendMove(gameId, '', 'active').then(() => {
-    console.log('Global reset synced successfully.');
-  }).catch(err => {
-    console.error('Failed to reset game:', err);
-    alert('Oops! Reset failed to sync. Check your connection.');
-  });
-
-  draw();
-  updateUI();
-});
-
-undoBtn.addEventListener('click', () => {
-  if (playerColor === 'spectator') {
-    alert('Spectators cannot undo moves.');
-    return;
-  }
-  if (chess.game_over()) {
-    // If game was over, we might need a confirmation or special handling
-    // For now, let's just let them undo.
+  if (targetId === 'copy-btn') {
+    navigator.clipboard.writeText(shareLink.value).then(() => {
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('bg-emerald-500/30');
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('bg-emerald-500/30');
+      }, 2000);
+    });
   }
 
-  const move = chess.undo();
-  if (!move) return; // No moves to undo
+  if (targetId === 'new-game-btn') {
+    window.location.href = window.location.pathname;
+  }
 
-  // Recalculate lastMove
-  const history = chess.history({ verbose: true });
-  if (history.length > 0) {
-    const prev = history[history.length - 1];
-    lastMove = { from: prev.from, to: prev.to };
-  } else {
+  if (targetId === 'reset-btn') {
+    if (playerColor === 'spectator') {
+      alert('Spectators cannot reset the game.');
+      return;
+    }
+    if (!window.confirm('Reset the board? This will clear all moves for BOTH players.')) return;
+
+    console.log('Triggering global reset...');
+    chess.reset();
     lastMove = null;
+    deselect();
+    gameStatus = 'active';
+
+    sendMove(gameId, '', 'active').then(() => {
+      console.log('Reset successful');
+    }).catch(err => {
+      console.error('Reset failed:', err);
+    });
+
+    draw();
+    updateUI();
   }
 
-  deselect();
-  const movesStr = getMovesString();
-  const status = computeStatus();
+  if (targetId === 'undo-btn') {
+    if (playerColor === 'spectator') {
+      alert('Spectators cannot undo moves.');
+      return;
+    }
 
-  sendMove(gameId, movesStr, status).catch(error => {
-    console.error('Failed to undo move:', error);
-  });
+    const move = chess.undo();
+    if (!move) return;
 
-  draw();
-  updateUI();
+    const history = chess.history({ verbose: true });
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      lastMove = { from: prev.from, to: prev.to };
+    } else {
+      lastMove = null;
+    }
+
+    deselect();
+    const movesStr = getMovesString();
+    const status = computeStatus();
+
+    sendMove(gameId, movesStr, status);
+    draw();
+    updateUI();
+  }
 });
 
 // Start
