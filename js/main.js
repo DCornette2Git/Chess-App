@@ -474,15 +474,24 @@ newGameBtn.addEventListener('click', () => {
 });
 
 resetBtn.addEventListener('click', () => {
-  if (playerColor === 'spectator') return;
+  // If playerColor is null, we assume they are the host or haven't been assigned yet, so allow reset
+  if (playerColor === 'spectator') {
+    alert('Spectators cannot reset the game.');
+    return;
+  }
+  
   if (!window.confirm('Reset the board? This will clear all moves for BOTH players.')) return;
 
+  console.log('Resetting board globally...');
   chess.reset();
   lastMove = null;
   deselect();
   gameStatus = 'active'; 
 
-  sendMove(gameId, '', 'active').catch(err => {
+  // Wipe moves and set status back to active
+  sendMove(gameId, '', 'active').then(() => {
+    console.log('Global reset synced successfully.');
+  }).catch(err => {
     console.error('Failed to reset game:', err);
     alert('Oops! Reset failed to sync. Check your connection.');
   });
@@ -492,7 +501,10 @@ resetBtn.addEventListener('click', () => {
 });
 
 undoBtn.addEventListener('click', () => {
-  if (playerColor === 'spectator') return;
+  if (playerColor === 'spectator') {
+    alert('Spectators cannot undo moves.');
+    return;
+  }
   if (chess.game_over()) {
     // If game was over, we might need a confirmation or special handling
     // For now, let's just let them undo.
