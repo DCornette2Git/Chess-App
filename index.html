@@ -11,19 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Tailwind CSS v3 Play CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-          },
-        },
-      },
-    };
-  </script>
+  <!-- Generated Tailwind CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Empty favicon to prevent 404 error -->
+  <link rel="icon" href="data:,">
 
   <!-- Chess.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
@@ -154,6 +146,10 @@
             class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 rounded-lg py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer">
             Reset Game
           </button>
+          <button id="rotate-btn"
+            class="w-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/10 rounded-lg py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer mt-2">
+            Rotate Board 🔄
+          </button>
         </div>
       </aside>
 
@@ -206,10 +202,16 @@
       <div class="text-5xl mb-3">👑</div>
       <h2 id="gameover-title" class="text-2xl font-bold mb-1"></h2>
       <p id="gameover-subtitle" class="text-white/50 mb-6"></p>
-      <button id="new-game-btn"
-        class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 px-6 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-violet-600/25">
-        New Game
-      </button>
+      <div class="flex gap-3 justify-center">
+        <button id="new-game-btn"
+          class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-violet-600/25 text-sm">
+          New Link
+        </button>
+        <button id="rematch-btn"
+          class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-emerald-600/25 text-sm">
+          Rematch
+        </button>
+      </div>
     </div>
   </div>
 

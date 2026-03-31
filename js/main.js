@@ -104,17 +104,26 @@ function updateUI() {
     statusEl.className = 'text-sm font-medium text-emerald-400';
   }
 
-  // Captured pieces
+  // Captured pieces (Safe handling for players vs spectators)
   const captured = getCapturedPieces(chess);
-  const opponentColor = playerColor === 'w' ? 'b' : 'w';
+  const isSpectator = playerColor === 'spectator';
+  
+  // Decide which colors to show in which slots
+  // Player: Top = Opponent's pieces you took, Bottom = Your pieces they took
+  // Spectator: Top = White, Bottom = Black
+  const topColor = isSpectator ? 'w' : (playerColor === 'w' ? 'b' : 'w');
+  const bottomColor = isSpectator ? 'b' : playerColor;
 
-  // Opponent's pieces you have taken
-  capturedByPlayer.innerHTML = captured[opponentColor]
-    .map(t => `<span class="${opponentColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(opponentColor, t)}</span>`).join(' ');
-
-  // Your pieces that have been taken
-  capturedByOpponent.innerHTML = captured[playerColor]
-    .map(t => `<span class="${playerColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(playerColor, t)}</span>`).join(' ');
+  // Render captured pieces (only if color is valid 'w' or 'b')
+  if (captured[topColor]) {
+    capturedByPlayer.innerHTML = captured[topColor]
+      .map(t => `<span class="${topColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(topColor, t)}</span>`).join(' ');
+  }
+  
+  if (captured[bottomColor]) {
+    capturedByOpponent.innerHTML = captured[bottomColor]
+      .map(t => `<span class="${bottomColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(bottomColor, t)}</span>`).join(' ');
+  }
 
   // Move history
   const history = chess.history();
@@ -321,10 +330,15 @@ function onRemoteUpdate(data) {
   }
 
   // Status change
-  if (data.status === 'active' && gameStatus === 'waiting') {
-    gameStatus = 'active';
-    shareBanner.style.transform = 'translateY(-100%)';
-    setTimeout(() => shareBanner.classList.add('hidden'), 500);
+  if (data.status === 'active') {
+    if (gameStatus === 'waiting') {
+      gameStatus = 'active';
+      shareBanner.style.transform = 'translateY(-100%)';
+      setTimeout(() => shareBanner.classList.add('hidden'), 500);
+    }
+    gameoverDialog.classList.add('hidden');
+    gameoverDialog.classList.remove('flex');
+    gameoverDialog.classList.remove('shown');
   }
   if (data.status === 'checkmate' || data.status === 'stalemate' || data.status === 'draw') {
     gameStatus = data.status;
@@ -379,8 +393,10 @@ async function init() {
     }
 
     // Show share banner
-    const link = window.location.href;
-    shareLink.value = link;
+    const shareUrl = new URL(window.location.origin + window.location.pathname);
+    shareUrl.searchParams.set('gameID', gameId);
+    shareUrl.searchParams.set('c', 'b'); // Default opponent to black
+    shareLink.value = shareUrl.toString();
     shareBanner.classList.remove('hidden');
     setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
 
@@ -412,8 +428,8 @@ async function init() {
     if (savedColor) {
       playerColor = savedColor;
     } else if (game.status === 'waiting') {
-      playerColor = 'b';
-      localStorage.setItem(`chess_${gameId}`, 'b');
+      playerColor = params.get('c') === 'w' ? 'w' : 'b';
+      localStorage.setItem(`chess_${gameId}`, playerColor);
       try {
         await joinGame(gameId);
       } catch (err) {
@@ -421,12 +437,12 @@ async function init() {
       }
       gameStatus = 'active';
     } else {
-      // If status is active but no moves made yet, allow joining as black
+      // If status is active but no moves made yet, allow joining
       const moveCount = (game.moves || '').split('|').filter(m => m).length;
       if (moveCount === 0 || moveCount === 1) {
         // This handles cases where white already moved but black is just now clicking the link
-        playerColor = 'b';
-        localStorage.setItem(`chess_${gameId}`, 'b');
+        playerColor = params.get('c') === 'w' ? 'w' : 'b';
+        localStorage.setItem(`chess_${gameId}`, playerColor);
         try {
           await joinGame(gameId);
         } catch (err) {
@@ -480,6 +496,43 @@ document.addEventListener('click', (e) => {
 
   if (targetId === 'new-game-btn') {
     window.location.href = window.location.pathname;
+  }
+
+  if (targetId === 'rematch-btn') {
+    if (playerColor === 'spectator') return;
+    chess.reset();
+    lastMove = null;
+    deselect();
+    gameStatus = 'active';
+
+    sendMove(gameId, '', 'active').then(() => {
+      console.log('Rematch successfully synced to Supabase.');
+    }).catch(err => {
+      console.error('Network Error: Rematch failed to sync:', err);
+    });
+
+    gameoverDialog.classList.add('hidden');
+    gameoverDialog.classList.remove('flex');
+    gameoverDialog.classList.remove('shown');
+
+    draw();
+    updateUI();
+  }
+
+  if (targetId === 'rotate-btn') {
+    if (playerColor === 'spectator') return;
+    // Swap color
+    playerColor = playerColor === 'w' ? 'b' : 'w';
+    localStorage.setItem(`chess_${gameId}`, playerColor);
+    
+    // Update share link so opponent gets opposite color
+    const shareUrl = new URL(window.location.origin + window.location.pathname);
+    shareUrl.searchParams.set('gameID', gameId);
+    shareUrl.searchParams.set('c', playerColor === 'w' ? 'b' : 'w');
+    if (shareLink) shareLink.value = shareUrl.toString();
+
+    draw();
+    updateUI();
   }
 
   if (targetId === 'reset-btn') {

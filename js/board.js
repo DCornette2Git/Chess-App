@@ -62,6 +62,7 @@ export function renderBoard(boardEl, chess, playerColor, selectedSquare, legalMo
         span.textContent = PIECE_SYMBOLS[piece.color + piece.type];
         span.className = 'piece select-none pointer-events-none leading-none';
         span.style.fontSize = 'clamp(2rem, 6vw, 3.2rem)';
+        span.style.color = piece.color === 'w' ? '#ffffff' : '#000000';
         span.style.textShadow = piece.color === 'w'
           ? '0 2px 6px rgba(0,0,0,0.25)'
           : '0 2px 6px rgba(0,0,0,0.45)';
