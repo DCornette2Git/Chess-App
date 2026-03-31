@@ -1,6 +1,6 @@
 const PIECE_SYMBOLS = {
-  wk: '\u2654', wq: '\u2655', wr: '\u2656', wb: '\u2657', wn: '\u2658', wp: '\u2659',
-  bk: '\u265A', bq: '\u265B', br: '\u265C', bb: '\u265D', bn: '\u265E', bp: '\u265F',
+  wk: '\u2654\uFE0E', wq: '\u2655\uFE0E', wr: '\u2656\uFE0E', wb: '\u2657\uFE0E', wn: '\u2658\uFE0E', wp: '\u2659\uFE0E',
+  bk: '\u265A\uFE0E', bq: '\u265B\uFE0E', br: '\u265C\uFE0E', bb: '\u265D\uFE0E', bn: '\u265E\uFE0E', bp: '\u265F\uFE0E',
 };
 
 const COLORS = {

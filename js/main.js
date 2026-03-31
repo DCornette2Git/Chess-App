@@ -1,4 +1,4 @@
-import { renderBoard, getCapturedPieces, getPieceSymbol } from './board.js';
+import { renderBoard, getCapturedPieces, getPieceSymbol } from './board.js?v=2.3';
 import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame } from './network.js';
 
 // --- State ---
