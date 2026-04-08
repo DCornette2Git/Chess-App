@@ -150,6 +150,10 @@
             class="w-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/10 rounded-lg py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer mt-2">
             Rotate Board 🔄
           </button>
+          <button id="play-ai-btn"
+            class="w-full bg-gradient-to-r from-violet-600/30 to-indigo-600/30 hover:from-violet-500/40 hover:to-indigo-500/40 text-violet-200 border border-violet-500/30 rounded-lg py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer mt-2 shadow-[0_0_15px_rgba(139,92,246,0.15)]">
+            Play Computer 🤖
+          </button>
         </div>
       </aside>
 
@@ -229,6 +233,43 @@
         <button id="confirm-reset-btn"
           class="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-red-600/25">
           Reset Now
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- ─── AI Modal ─── -->
+  <div id="ai-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/70 backdrop-blur-md overlay-animate">
+    <div class="bg-[#1a1a2e] rounded-2xl p-8 border border-white/10 shadow-2xl text-center dialog-animate max-w-sm mx-4">
+      <div class="text-5xl mb-3">🤖</div>
+      <h2 class="text-xl font-bold mb-2">Play vs Computer</h2>
+      
+      <div class="text-left mb-4">
+        <label class="block text-white/50 text-xs uppercase tracking-wider mb-2 font-semibold">Difficulty Level</label>
+        <select id="ai-level-select" class="w-full bg-white/5 rounded-lg px-3 py-2.5 text-sm text-white border border-white/10 outline-none focus:border-violet-500/50 cursor-pointer">
+          <option value="0" class="bg-[#1a1a2e]">Level 1 (Beginner)</option>
+          <option value="5" class="bg-[#1a1a2e]">Level 2 (Easy)</option>
+          <option value="10" class="bg-[#1a1a2e]" selected>Level 3 (Intermediate)</option>
+          <option value="15" class="bg-[#1a1a2e]">Level 4 (Hard)</option>
+          <option value="20" class="bg-[#1a1a2e]">Level 5 (Grandmaster)</option>
+        </select>
+      </div>
+
+      <div class="text-left mb-6">
+        <label class="block text-white/50 text-xs uppercase tracking-wider mb-2 font-semibold">You Play As</label>
+        <div class="flex gap-2">
+          <button id="ai-color-w" class="flex-1 bg-white/20 hover:bg-white/30 text-white font-medium py-2 rounded-lg border-2 border-emerald-500 transition-all text-sm">White</button>
+          <button id="ai-color-b" class="flex-1 bg-white/5 hover:bg-white/10 text-white/60 font-medium py-2 rounded-lg border-2 border-transparent transition-all text-sm">Black</button>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="cancel-ai-btn"
+          class="flex-1 bg-white/10 hover:bg-white/20 px-4 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer">
+          Cancel
+        </button>
+        <button id="confirm-ai-btn"
+          class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-lg shadow-violet-600/25">
+          Start Game
         </button>
       </div>
     </div>

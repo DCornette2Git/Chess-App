@@ -9,6 +9,10 @@ let selectedSquare = null;
 let legalMoves = [];
 let lastMove = null;
 let gameStatus = 'waiting';
+let isAIMode = false;
+let aiLevel = 10;
+let engine = null;
+let engineThinking = false;
 
 // --- DOM refs ---
 const boardEl = document.getElementById('board');
@@ -34,6 +38,14 @@ const undoBtn = document.getElementById('undo-btn');
 const resetModal = document.getElementById('reset-modal');
 const confirmResetBtn = document.getElementById('confirm-reset-btn');
 const cancelResetBtn = document.getElementById('cancel-reset-btn');
+const playAIBtn = document.getElementById('play-ai-btn');
+const aiModal = document.getElementById('ai-modal');
+const cancelAIBtn = document.getElementById('cancel-ai-btn');
+const confirmAIBtn = document.getElementById('confirm-ai-btn');
+const aiLevelSelect = document.getElementById('ai-level-select');
+const aiColorW = document.getElementById('ai-color-w');
+const aiColorB = document.getElementById('ai-color-b');
+let selectedAIColor = 'w';
 
 // --- Helpers ---
 function generateGameId() {
@@ -148,7 +160,8 @@ function updateUI() {
   if (playerColor) {
     const isSpectator = playerColor === 'spectator';
     const colorName = playerColor === 'w' ? 'White' : (playerColor === 'b' ? 'Black' : 'Spectator');
-    const oppName = playerColor === 'w' ? 'Black' : (playerColor === 'b' ? 'White' : 'Both Players');
+    const levelMap = {'0': '1', '5': '2', '10': '3', '15': '4', '20': '5'};
+    const oppName = isAIMode ? `Computer (Level ${levelMap[aiLevel] || 3})` : (playerColor === 'w' ? 'Black' : (playerColor === 'b' ? 'White' : 'Both Players'));
 
     playerColorLabel.textContent = colorName;
     playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : (playerColor === 'b' ? 'text-gray-300' : 'text-violet-400')}`;
@@ -184,7 +197,7 @@ function updateUI() {
 function handleSquareClick(square) {
   if (!playerColor || playerColor === 'spectator') return;
   if (chess.turn() !== playerColor) return;
-  if (chess.game_over()) return;
+  if (chess.game_over() || engineThinking) return;
   if (gameStatus !== 'active' && !(gameStatus === 'waiting' && playerColor === 'w' && chess.history().length === 0)) {
     // Only white can move first while waiting, once game is created
     // Actually, let white move even while waiting - moves will sync when opponent joins
@@ -259,15 +272,21 @@ function afterMove(move) {
     syncStatus = computedStatus;
   }
 
-  sendMove(gameId, movesStr, syncStatus).catch(err => {
-    console.error('Failed to send move:', err);
-    statusEl.textContent = 'Sync error — retrying…';
-    // Retry once
-    setTimeout(() => sendMove(gameId, movesStr, syncStatus).catch(console.error), 2000);
-  });
+  if (!isAIMode) {
+    sendMove(gameId, movesStr, syncStatus).catch(err => {
+      console.error('Failed to send move:', err);
+      statusEl.textContent = 'Sync error — retrying…';
+      // Retry once
+      setTimeout(() => sendMove(gameId, movesStr, syncStatus).catch(console.error), 2000);
+    });
+  }
 
   draw();
   updateUI();
+
+  if (isAIMode && gameStatus === 'active' && chess.turn() !== playerColor && !chess.game_over()) {
+    askEngine();
+  }
 }
 
 // --- Promotion ---
@@ -347,6 +366,34 @@ function onRemoteUpdate(data) {
   updateUI();
 }
 
+// --- AI Logic ---
+function startEngine() {
+  if (!engine) {
+    engine = new Worker('js/stockfish.js');
+    engine.onmessage = function(event) {
+      const line = event.data;
+      if (line && line.startsWith('bestmove')) {
+        engineThinking = false;
+        const move = line.split(' ')[1];
+        if (move && move !== '(none)') {
+          const from = move.substring(0, 2);
+          const to = move.substring(2, 4);
+          const promotion = move.length > 4 ? move[4] : undefined;
+          executeMove(from, to, promotion);
+        }
+      }
+    };
+  }
+}
+
+function askEngine() {
+  if (!engine || chess.game_over()) return;
+  engineThinking = true;
+  engine.postMessage('setoption name Skill Level value ' + aiLevel);
+  engine.postMessage('position fen ' + chess.fen());
+  engine.postMessage('go movetime 500');
+}
+
 // --- Init ---
 async function init() {
   chess = new Chess();
@@ -368,6 +415,20 @@ async function init() {
 
   // Parse URL
   const params = new URLSearchParams(window.location.search);
+  
+  if (params.get('ai') === 'true') {
+    isAIMode = true;
+    aiLevel = parseInt(params.get('level')) || 10;
+    playerColor = params.get('c') === 'b' ? 'b' : 'w';
+    gameStatus = 'active';
+    shareBanner.classList.add('hidden');
+    startEngine();
+    draw();
+    updateUI();
+    if (playerColor === 'b') askEngine();
+    return;
+  }
+  
   gameId = params.get('gameID');
 
   if (!gameId) {
@@ -577,7 +638,14 @@ document.addEventListener('click', (e) => {
       return;
     }
 
-    const move = chess.undo();
+    let move = null;
+    if (isAIMode) {
+      // Undo both AI an player move
+      chess.undo();
+      move = chess.undo();
+    } else {
+      move = chess.undo();
+    }
     if (!move) return;
 
     const history = chess.history({ verbose: true });
@@ -590,11 +658,59 @@ document.addEventListener('click', (e) => {
 
     deselect();
     const movesStr = getMovesString();
-    const status = computeStatus();
-
-    sendMove(gameId, movesStr, status);
+    
+    // In AI Game, status could have been checkmate, now back to active
+    gameStatus = computeStatus();
+    
+    if (!isAIMode) {
+      sendMove(gameId, movesStr, gameStatus);
+    }
+    
     draw();
     updateUI();
+  }
+  if (targetId === 'play-ai-btn') {
+    aiModal.classList.remove('hidden');
+    aiModal.classList.add('flex');
+    
+    // Select White by default
+    selectedAIColor = 'w';
+    aiColorW.classList.replace('bg-white/5', 'bg-white/20');
+    aiColorW.classList.replace('text-white/60', 'text-white');
+    aiColorW.classList.replace('border-transparent', 'border-emerald-500');
+    aiColorB.classList.replace('bg-white/20', 'bg-white/5');
+    aiColorB.classList.replace('text-white', 'text-white/60');
+    aiColorB.classList.replace('border-emerald-500', 'border-transparent');
+  }
+
+  if (targetId === 'cancel-ai-btn') {
+    aiModal.classList.add('hidden');
+    aiModal.classList.remove('flex');
+  }
+
+  if (targetId === 'ai-color-w') {
+    selectedAIColor = 'w';
+    aiColorW.classList.replace('bg-white/5', 'bg-white/20');
+    aiColorW.classList.replace('text-white/60', 'text-white');
+    aiColorW.classList.replace('border-transparent', 'border-emerald-500');
+    aiColorB.classList.replace('bg-white/20', 'bg-white/5');
+    aiColorB.classList.replace('text-white', 'text-white/60');
+    aiColorB.classList.replace('border-emerald-500', 'border-transparent');
+  }
+
+  if (targetId === 'ai-color-b') {
+    selectedAIColor = 'b';
+    aiColorB.classList.replace('bg-white/5', 'bg-white/20');
+    aiColorB.classList.replace('text-white/60', 'text-white');
+    aiColorB.classList.replace('border-transparent', 'border-emerald-500');
+    aiColorW.classList.replace('bg-white/20', 'bg-white/5');
+    aiColorW.classList.replace('text-white', 'text-white/60');
+    aiColorW.classList.replace('border-emerald-500', 'border-transparent');
+  }
+
+  if (targetId === 'confirm-ai-btn') {
+    const level = aiLevelSelect.value;
+    window.location.search = `?ai=true&level=${level}&c=${selectedAIColor}`;
   }
 });
 
