@@ -366,20 +366,33 @@ function onRemoteUpdate(data) {
 // --- AI Logic ---
 function startEngine() {
   if (!engine) {
-    engine = new Worker('js/stockfish.js');
-    engine.onmessage = function(event) {
-      const line = event.data;
-      if (line && line.startsWith('bestmove')) {
-        engineThinking = false;
-        const move = line.split(' ')[1];
-        if (move && move !== '(none)') {
-          const from = move.substring(0, 2);
-          const to = move.substring(2, 4);
-          const promotion = move.length > 4 ? move[4] : undefined;
-          executeMove(from, to, promotion);
-        }
+    try {
+      engine = new Worker('js/stockfish.js');
+      engine.onmessage = handleEngineMessage;
+    } catch (e) {
+      console.warn('Local worker failed, trying cloud fallback...', e);
+      try {
+        const workerBlob = new Blob([`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');`], { type: 'application/javascript' });
+        engine = new Worker(URL.createObjectURL(workerBlob));
+        engine.onmessage = handleEngineMessage;
+      } catch (err) {
+        console.error('Failed to start engine completely:', err);
       }
-    };
+    }
+  }
+}
+
+function handleEngineMessage(event) {
+  const line = event.data;
+  if (line && line.startsWith('bestmove')) {
+    engineThinking = false;
+    const move = line.split(' ')[1];
+    if (move && move !== '(none)') {
+      const from = move.substring(0, 2);
+      const to = move.substring(2, 4);
+      const promotion = move.length > 4 ? move[4] : undefined;
+      executeMove(from, to, promotion);
+    }
   }
 }
 
@@ -442,7 +455,7 @@ async function init() {
       return;
     }
 
-    const shareUrl = new URL(window.location.origin + window.location.pathname);
+    const shareUrl = new URL(window.location.href.split('?')[0]);
     shareUrl.searchParams.set('gameID', gameId);
     
     if (isAIMode) {
