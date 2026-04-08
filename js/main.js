@@ -272,14 +272,11 @@ function afterMove(move) {
     syncStatus = computedStatus;
   }
 
-  if (!isAIMode) {
-    sendMove(gameId, movesStr, syncStatus).catch(err => {
-      console.error('Failed to send move:', err);
-      statusEl.textContent = 'Sync error — retrying…';
-      // Retry once
-      setTimeout(() => sendMove(gameId, movesStr, syncStatus).catch(console.error), 2000);
-    });
-  }
+  sendMove(gameId, movesStr, syncStatus).catch(err => {
+    console.error('Failed to send move:', err);
+    statusEl.textContent = 'Sync error — retrying…';
+    setTimeout(() => sendMove(gameId, movesStr, syncStatus).catch(console.error), 2000);
+  });
 
   draw();
   updateUI();
@@ -419,14 +416,6 @@ async function init() {
   if (params.get('ai') === 'true') {
     isAIMode = true;
     aiLevel = parseInt(params.get('level')) || 10;
-    playerColor = params.get('c') === 'b' ? 'b' : 'w';
-    gameStatus = 'active';
-    shareBanner.classList.add('hidden');
-    startEngine();
-    draw();
-    updateUI();
-    if (playerColor === 'b') askEngine();
-    return;
   }
   
   gameId = params.get('gameID');
@@ -434,8 +423,8 @@ async function init() {
   if (!gameId) {
     // --- Create new game ---
     gameId = generateGameId();
-    playerColor = 'w';
-    localStorage.setItem(`chess_${gameId}`, 'w');
+    playerColor = isAIMode ? (params.get('c') === 'b' ? 'b' : 'w') : 'w';
+    localStorage.setItem(`chess_${gameId}`, playerColor);
 
     // Update URL without reload
     const url = new URL(window.location);
@@ -453,15 +442,28 @@ async function init() {
       return;
     }
 
-    // Show share banner
     const shareUrl = new URL(window.location.origin + window.location.pathname);
     shareUrl.searchParams.set('gameID', gameId);
-    shareUrl.searchParams.set('c', 'b'); // Default opponent to black
-    shareLink.value = shareUrl.toString();
+    
+    if (isAIMode) {
+      shareUrl.searchParams.set('ai', 'true');
+      shareUrl.searchParams.set('level', aiLevel);
+      shareLink.value = shareUrl.toString();
+      
+      const shareSpan = shareBanner.querySelector('span');
+      if (shareSpan) shareSpan.textContent = '🔗 Share this link for others to spectate:';
+      
+      gameStatus = 'active'; // In AI mode we don't wait for opponent
+      startEngine();
+      if (playerColor === 'b') askEngine();
+    } else {
+      shareUrl.searchParams.set('c', 'b'); // Default opponent to black
+      shareLink.value = shareUrl.toString();
+      gameStatus = 'waiting';
+    }
+
     shareBanner.classList.remove('hidden');
     setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
-
-    gameStatus = 'waiting';
   } else {
     // --- Join existing game ---
     const savedColor = localStorage.getItem(`chess_${gameId}`);
@@ -488,7 +490,8 @@ async function init() {
 
     if (savedColor) {
       playerColor = savedColor;
-    } else if (game.status === 'waiting') {
+      if (isAIMode) startEngine();
+    } else if (!isAIMode && game.status === 'waiting') {
       playerColor = params.get('c') === 'w' ? 'w' : 'b';
       localStorage.setItem(`chess_${gameId}`, playerColor);
       try {
@@ -500,7 +503,7 @@ async function init() {
     } else {
       // If status is active but no moves made yet, allow joining
       const moveCount = (game.moves || '').split('|').filter(m => m).length;
-      if (moveCount === 0 || moveCount === 1) {
+      if (!isAIMode && (moveCount === 0 || moveCount === 1)) {
         // This handles cases where white already moved but black is just now clicking the link
         playerColor = params.get('c') === 'w' ? 'w' : 'b';
         localStorage.setItem(`chess_${gameId}`, playerColor);
@@ -511,7 +514,7 @@ async function init() {
         }
         gameStatus = 'active';
       } else {
-        // Game definitely in progress with multiple moves — spectator
+        // Game definitely in progress with multiple moves or it's an AI mode game - spectator
         playerColor = 'spectator';
       }
     }
@@ -662,9 +665,7 @@ document.addEventListener('click', (e) => {
     // In AI Game, status could have been checkmate, now back to active
     gameStatus = computeStatus();
     
-    if (!isAIMode) {
-      sendMove(gameId, movesStr, gameStatus);
-    }
+    sendMove(gameId, movesStr, gameStatus);
     
     draw();
     updateUI();
