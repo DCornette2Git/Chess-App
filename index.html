@@ -86,23 +86,8 @@
 </head>
 <body class="min-h-screen text-white font-sans antialiased overflow-x-hidden">
 
-  <!-- ─── Share Banner ─── -->
-  <div id="share-banner" class="hidden fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-violet-600/90 to-indigo-600/90 backdrop-blur-sm border-b border-white/10 py-3 px-6">
-    <div class="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3">
-      <span class="text-sm text-white/90 font-medium whitespace-nowrap">🔗 Share this link with your opponent:</span>
-      <div class="flex items-center gap-2 w-full max-w-md">
-        <input id="share-link" readonly
-          class="flex-1 bg-white/10 rounded-lg px-3 py-1.5 text-sm text-white border border-white/20 outline-none focus:border-white/40 font-mono" />
-        <button id="copy-btn"
-          class="bg-white/20 hover:bg-white/30 active:scale-95 rounded-lg px-4 py-1.5 text-sm font-medium transition-all cursor-pointer select-none">
-          Copy
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ─── Main Game View ─── -->
-  <main id="game-view" class="hidden flex items-center justify-center min-h-screen p-4 pt-20">
+  <main id="game-view" class="hidden flex items-center justify-center min-h-screen p-4 pt-4">
     <div class="flex flex-col lg:flex-row items-center lg:items-stretch gap-6 max-w-[1100px]">
 
       <!-- Left Panel: Game Info -->
@@ -209,7 +194,7 @@
       <div class="flex gap-3 justify-center">
         <button id="new-game-btn"
           class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-violet-600/25 text-sm">
-          New Link
+          Return to Lobby
         </button>
         <button id="rematch-btn"
           class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg shadow-emerald-600/25 text-sm">
@@ -346,6 +331,6 @@
   </div>
 
   <!-- App -->
-  <script type="module" src="js/main.js?v=2.6"></script>
+  <script type="module" src="js/main.js?v=2.8"></script>
 </body>
 </html>

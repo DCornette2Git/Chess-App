@@ -29,9 +29,6 @@ const lobbyView = document.getElementById('lobby-view');
 const lobbyUsername = document.getElementById('lobby-username');
 const openGamesList = document.getElementById('open-games-list');
 const boardEl = document.getElementById('board');
-const shareBanner = document.getElementById('share-banner');
-const shareLink = document.getElementById('share-link');
-const copyBtn = document.getElementById('copy-btn');
 const statusEl = document.getElementById('game-status');
 const turnEl = document.getElementById('turn-indicator');
 const playerColorLabel = document.getElementById('player-color-label');
@@ -355,8 +352,6 @@ function onRemoteUpdate(data) {
   if (data.status === 'active') {
     if (gameStatus === 'waiting') {
       gameStatus = 'active';
-      shareBanner.style.transform = 'translateY(-100%)';
-      setTimeout(() => shareBanner.classList.add('hidden'), 500);
     }
     gameoverDialog.classList.add('hidden');
     gameoverDialog.classList.remove('flex');
@@ -528,24 +523,14 @@ async function init() {
       return;
     }
 
-    const shareUrl = new URL(window.location.href.split('?')[0]);
-    shareUrl.searchParams.set('gameID', gameId);
-    
     if (isAIMode) {
       gameStatus = 'active'; // In AI mode we don't wait for opponent
       startEngine();
       if (playerColor === 'b') askEngine();
     } else {
-      shareUrl.searchParams.set('c', 'b'); // Default opponent to black
-      shareLink.value = shareUrl.toString();
       gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
       // Sync waiting status
       try { await sendMove(gameId, '', gameStatus); } catch(e){}
-    }
-
-    if (!isAIMode) {
-      shareBanner.classList.remove('hidden');
-      setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
     }
   } else {
     // --- Join existing game ---
@@ -674,17 +659,6 @@ document.addEventListener('click', (e) => {
   const targetId = e.target.closest('button')?.id;
   if (!targetId) return;
 
-  if (targetId === 'copy-btn') {
-    navigator.clipboard.writeText(shareLink.value).then(() => {
-      copyBtn.textContent = 'Copied!';
-      copyBtn.classList.add('bg-emerald-500/30');
-      setTimeout(() => {
-        copyBtn.textContent = 'Copy';
-        copyBtn.classList.remove('bg-emerald-500/30');
-      }, 2000);
-    });
-  }
-
   if (targetId === 'new-game-btn') {
     window.location.href = window.location.pathname;
   }
@@ -714,12 +688,6 @@ document.addEventListener('click', (e) => {
     playerColor = playerColor === 'w' ? 'b' : 'w';
     localStorage.setItem(`chess_${gameId}`, playerColor);
     
-    // Update share link so opponent gets opposite color
-    const shareUrl = new URL(window.location.origin + window.location.pathname);
-    shareUrl.searchParams.set('gameID', gameId);
-    shareUrl.searchParams.set('c', playerColor === 'w' ? 'b' : 'w');
-    if (shareLink) shareLink.value = shareUrl.toString();
-
     draw();
     updateUI();
   }
@@ -818,16 +786,8 @@ document.addEventListener('click', (e) => {
     window.history.replaceState({}, '', url);
 
     createGame(gameId).then(() => {
-      const shareUrl = new URL(window.location.href.split('?')[0]);
-      shareUrl.searchParams.set('gameID', gameId);
-      shareUrl.searchParams.set('c', 'b');
-      shareLink.value = shareUrl.toString();
-      
       gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
       sendMove(gameId, '', gameStatus).catch(e => console.error(e));
-
-      shareBanner.classList.remove('hidden');
-      setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
 
       authView.classList.add('hidden');
       lobbyView.classList.add('hidden');
