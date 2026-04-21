@@ -116,22 +116,18 @@ function updateUI() {
     statusEl.className = 'text-sm font-medium text-emerald-400';
   }
 
-  // Captured pieces (Safe handling for players vs spectators)
+  // Captured pieces
   const captured = getCapturedPieces(chess);
-  const isSpectator = playerColor === 'spectator';
-  
-  // Decide which colors to show in which slots
-  // Player: Top = Opponent's pieces you took, Bottom = Your pieces they took
-  // Spectator: Top = White, Bottom = Black
-  const topColor = isSpectator ? 'w' : (playerColor === 'w' ? 'b' : 'w');
-  const bottomColor = isSpectator ? 'b' : playerColor;
 
-  // Render captured pieces (only if color is valid 'w' or 'b')
+  // Top = Opponent's pieces you captured, Bottom = Your pieces they captured
+  const topColor = playerColor === 'w' ? 'b' : 'w';
+  const bottomColor = playerColor || 'w';
+
   if (captured[topColor]) {
     capturedByPlayer.innerHTML = captured[topColor]
       .map(t => `<span class="${topColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(topColor, t)}</span>`).join(' ');
   }
-  
+
   if (captured[bottomColor]) {
     capturedByOpponent.innerHTML = captured[bottomColor]
       .map(t => `<span class="${bottomColor === 'w' ? 'text-white' : 'text-white/40'}">${getPieceSymbol(bottomColor, t)}</span>`).join(' ');
@@ -158,18 +154,15 @@ function updateUI() {
 
   // Player labels
   if (playerColor) {
-    const isSpectator = playerColor === 'spectator';
-    const colorName = playerColor === 'w' ? 'White' : (playerColor === 'b' ? 'Black' : 'Spectator');
+    const colorName = playerColor === 'w' ? 'White' : 'Black';
     const levelMap = {'0': '1', '5': '2', '10': '3', '15': '4', '20': '5'};
-    const oppName = isAIMode ? `Computer (Level ${levelMap[aiLevel] || 3})` : (playerColor === 'w' ? 'Black' : (playerColor === 'b' ? 'White' : 'Both Players'));
+    const oppName = isAIMode ? `Computer (Level ${levelMap[aiLevel] || 3})` : (playerColor === 'w' ? 'Black' : 'White');
 
     playerColorLabel.textContent = colorName;
-    playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : (playerColor === 'b' ? 'text-gray-300' : 'text-violet-400')}`;
+    playerColorLabel.className = `text-sm font-semibold ${playerColor === 'w' ? 'text-white' : 'text-gray-300'}`;
 
-    console.log('Role identified:', playerColor); // Debug log
-
-    playerName.textContent = isSpectator ? 'Spectating View' : `You (${colorName})`;
-    opponentName.textContent = isSpectator ? 'Active Game' : oppName;
+    playerName.textContent = `You (${colorName})`;
+    opponentName.textContent = oppName;
   }
 
   // Game over dialog
@@ -195,7 +188,7 @@ function updateUI() {
 
 // --- Interaction ---
 function handleSquareClick(square) {
-  if (!playerColor || playerColor === 'spectator') return;
+  if (!playerColor) return;
   if (chess.turn() !== playerColor) return;
   if (chess.game_over() || engineThinking) return;
   if (gameStatus !== 'active' && !(gameStatus === 'waiting' && playerColor === 'w' && chess.history().length === 0)) {
@@ -459,13 +452,6 @@ async function init() {
     shareUrl.searchParams.set('gameID', gameId);
     
     if (isAIMode) {
-      shareUrl.searchParams.set('ai', 'true');
-      shareUrl.searchParams.set('level', aiLevel);
-      shareLink.value = shareUrl.toString();
-      
-      const shareSpan = shareBanner.querySelector('span');
-      if (shareSpan) shareSpan.textContent = '🔗 Share this link for others to spectate:';
-      
       gameStatus = 'active'; // In AI mode we don't wait for opponent
       startEngine();
       if (playerColor === 'b') askEngine();
@@ -475,8 +461,10 @@ async function init() {
       gameStatus = 'waiting';
     }
 
-    shareBanner.classList.remove('hidden');
-    setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
+    if (!isAIMode) {
+      shareBanner.classList.remove('hidden');
+      setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
+    }
   } else {
     // --- Join existing game ---
     const savedColor = localStorage.getItem(`chess_${gameId}`);
@@ -513,11 +501,11 @@ async function init() {
         console.error('Failed to join game:', err);
       }
       gameStatus = 'active';
-    } else {
+    } else if (!isAIMode) {
       // If status is active but no moves made yet, allow joining
       const moveCount = (game.moves || '').split('|').filter(m => m).length;
-      if (!isAIMode && (moveCount === 0 || moveCount === 1)) {
-        // This handles cases where white already moved but black is just now clicking the link
+      if (moveCount === 0 || moveCount === 1) {
+        // Handles the case where white already moved but black is just now clicking the link
         playerColor = params.get('c') === 'w' ? 'w' : 'b';
         localStorage.setItem(`chess_${gameId}`, playerColor);
         try {
@@ -527,8 +515,8 @@ async function init() {
         }
         gameStatus = 'active';
       } else {
-        // Game definitely in progress with multiple moves or it's an AI mode game - spectator
-        playerColor = 'spectator';
+        // Game in progress — default to black (read-only, cannot move)
+        playerColor = 'b';
       }
     }
 
@@ -576,7 +564,6 @@ document.addEventListener('click', (e) => {
   }
 
   if (targetId === 'rematch-btn') {
-    if (playerColor === 'spectator') return;
     chess.reset();
     lastMove = null;
     deselect();
@@ -597,7 +584,6 @@ document.addEventListener('click', (e) => {
   }
 
   if (targetId === 'rotate-btn') {
-    if (playerColor === 'spectator') return;
     // Swap color
     playerColor = playerColor === 'w' ? 'b' : 'w';
     localStorage.setItem(`chess_${gameId}`, playerColor);
@@ -613,11 +599,6 @@ document.addEventListener('click', (e) => {
   }
 
   if (targetId === 'reset-btn') {
-    console.log('Reset button clicked. Role:', playerColor);
-    if (playerColor === 'spectator') {
-      alert('Spectators cannot reset the game.');
-      return;
-    }
     // Show custom modal instead of window.confirm
     resetModal.classList.remove('hidden');
     resetModal.classList.add('flex');
@@ -649,10 +630,6 @@ document.addEventListener('click', (e) => {
   }
 
   if (targetId === 'undo-btn') {
-    if (playerColor === 'spectator') {
-      alert('Spectators cannot undo moves.');
-      return;
-    }
 
     let move = null;
     if (isAIMode) {

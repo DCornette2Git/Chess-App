@@ -1,1 +1,2 @@
 "Build a 2-player chess web app using HTML, Tailwind, and JavaScript. I want to deploy this to GitHub Pages. Use a free Supabase backend to sync moves in real-time between two players. When the page loads, it should check the URL for a 'gameID' parameter. If one doesn't exist, generate a random one and give the user a link to share. Ensure the move data sent is as small as possible to accommodate a very slow internet connection."
+
