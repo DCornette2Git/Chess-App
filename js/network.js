@@ -60,3 +60,50 @@ export function unsubscribe() {
     channel = null;
   }
 }
+
+// --- Auth ---
+
+export async function signUpUser(username, password) {
+  const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`;
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { username }
+    }
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function signInUser(username, password) {
+  const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`;
+  const { data, error } = await client.auth.signInWithPassword({
+    email,
+    password
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function signOutUser() {
+  const { error } = await client.auth.signOut();
+  if (error) throw error;
+}
+
+export async function getCurrentSession() {
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+  return data.session;
+}
+
+export async function fetchOpenGames() {
+  // Query games where status starts with 'waiting'
+  const { data, error } = await client
+    .from('games')
+    .select('*')
+    .like('status', 'waiting%')
+    .limit(30);
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || [];
+}

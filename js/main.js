@@ -1,8 +1,10 @@
 import { renderBoard, getCapturedPieces, getPieceSymbol } from './board.js?v=2.3';
-import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame } from './network.js';
+import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame, signUpUser, signInUser, signOutUser, getCurrentSession, fetchOpenGames } from './network.js?v=2.5';
 
 // --- State ---
 let chess;
+let currentUser = null;
+let isLoginMode = true;
 let gameId = null;
 let playerColor = null;
 let selectedSquare = null;
@@ -15,6 +17,17 @@ let engine = null;
 let engineThinking = false;
 
 // --- DOM refs ---
+const gameView = document.getElementById('game-view');
+const authView = document.getElementById('auth-view');
+const authForm = document.getElementById('auth-form');
+const authUsername = document.getElementById('auth-username');
+const authPassword = document.getElementById('auth-password');
+const authToggleBtn = document.getElementById('auth-toggle-btn');
+const authSubmitBtn = document.getElementById('auth-submit-btn');
+const authError = document.getElementById('auth-error');
+const lobbyView = document.getElementById('lobby-view');
+const lobbyUsername = document.getElementById('lobby-username');
+const openGamesList = document.getElementById('open-games-list');
 const boardEl = document.getElementById('board');
 const shareBanner = document.getElementById('share-banner');
 const shareLink = document.getElementById('share-link');
@@ -397,23 +410,68 @@ function askEngine() {
   engine.postMessage('go movetime 500');
 }
 
+// --- Auth & Lobby Logic ---
+async function showLobby() {
+  authView.classList.add('hidden');
+  gameView.classList.add('hidden');
+  lobbyView.classList.remove('hidden');
+  
+  lobbyUsername.textContent = currentUser.user_metadata?.username || 'Player';
+  await refreshLobby();
+}
+
+async function refreshLobby() {
+  openGamesList.innerHTML = '<p class="text-white/30 text-sm italic text-center mt-8">Loading games...</p>';
+  try {
+    const games = await fetchOpenGames();
+    if (games.length === 0) {
+      openGamesList.innerHTML = '<p class="text-white/30 text-sm italic text-center mt-8">No open games found. Create one!</p>';
+      return;
+    }
+    
+    let html = '';
+    for (const g of games) {
+      const parts = g.status.split(':');
+      const hostName = parts.length > 1 ? parts[1] : 'Unknown';
+      html += `
+        <div class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-3 flex items-center justify-between transition-colors mb-2">
+          <div>
+            <div class="text-white font-medium text-sm">Host: ${hostName}</div>
+            <div class="text-white/40 text-xs">Game ID: ${g.id}</div>
+          </div>
+          <button data-join="${g.id}" class="bg-violet-600 hover:bg-violet-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer active:scale-95">Join Game</button>
+        </div>
+      `;
+    }
+    openGamesList.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    openGamesList.innerHTML = '<p class="text-red-400 text-sm text-center mt-8">Failed to load games.</p>';
+  }
+}
+
 // --- Init ---
 async function init() {
   chess = new Chess();
 
-  // Render board immediately so UI is never blank
-  playerColor = 'w';
-  draw();
-  updateUI();
-
-  // Attempt Supabase connection
+  // Attempt Supabase connection first
   try {
     initSupabase();
   } catch (err) {
     console.error('Supabase init failed:', err);
-    statusEl.textContent = 'Set your Supabase URL & key in js/config.js';
-    statusEl.className = 'text-sm font-semibold text-red-400';
+    authError.textContent = 'Set your Supabase URL & key in js/config.js';
+    authError.classList.remove('hidden');
     return;
+  }
+
+  // Check auth
+  try {
+    const session = await getCurrentSession();
+    if (session) {
+      currentUser = session.user;
+    }
+  } catch (err) {
+    console.error('Session check failed', err);
   }
 
   // Parse URL
@@ -425,6 +483,28 @@ async function init() {
   }
   
   gameId = params.get('gameID');
+
+  if (!currentUser && !gameId) {
+    // Show Auth
+    authView.classList.remove('hidden');
+    gameView.classList.add('hidden');
+    return;
+  }
+
+  if (currentUser && !gameId) {
+    // Show Lobby
+    showLobby();
+    return;
+  }
+
+  // If we reach here, we have a gameId, so we show the game view
+  authView.classList.add('hidden');
+  lobbyView.classList.add('hidden');
+  gameView.classList.remove('hidden');
+  
+  playerColor = 'w';
+  draw();
+  updateUI();
 
   if (!gameId) {
     // --- Create new game ---
@@ -458,7 +538,9 @@ async function init() {
     } else {
       shareUrl.searchParams.set('c', 'b'); // Default opponent to black
       shareLink.value = shareUrl.toString();
-      gameStatus = 'waiting';
+      gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
+      // Sync waiting status
+      try { await sendMove(gameId, '', gameStatus); } catch(e){}
     }
 
     if (!isAIMode) {
@@ -492,7 +574,7 @@ async function init() {
     if (savedColor) {
       playerColor = savedColor;
       if (isAIMode) startEngine();
-    } else if (!isAIMode && game.status === 'waiting') {
+    } else if (!isAIMode && game.status.startsWith('waiting')) {
       playerColor = params.get('c') === 'w' ? 'w' : 'b';
       localStorage.setItem(`chess_${gameId}`, playerColor);
       try {
@@ -541,6 +623,50 @@ async function init() {
   // Re-render with final state
   draw();
   updateUI();
+}
+
+// Auth Form Handler
+if (authForm) {
+  authForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = authUsername.value.trim();
+    const password = authPassword.value;
+    if (!username || !password) return;
+    
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = 'Please wait...';
+    authError.classList.add('hidden');
+    
+    try {
+      if (isLoginMode) {
+        const data = await signInUser(username, password);
+        currentUser = data.user;
+      } else {
+        const data = await signUpUser(username, password);
+        currentUser = data.user;
+      }
+      showLobby();
+    } catch (err) {
+      authError.textContent = err.message || 'Authentication failed';
+      authError.classList.remove('hidden');
+    } finally {
+      authSubmitBtn.disabled = false;
+      authSubmitBtn.textContent = 'Play Now';
+    }
+  });
+}
+
+// Auth Toggle Handler
+if (authToggleBtn) {
+  authToggleBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    isLoginMode = !isLoginMode;
+    authToggleBtn.innerHTML = isLoginMode 
+      ? 'Need an account? <span class="text-violet-400">Register</span>'
+      : 'Already have an account? <span class="text-violet-400">Login</span>';
+    authSubmitBtn.textContent = 'Play Now';
+    authError.classList.add('hidden');
+  });
 }
 
 // --- Event listeners (Global Delegate for robustness) ---
@@ -672,6 +798,70 @@ document.addEventListener('click', (e) => {
     aiColorB.classList.replace('bg-white/20', 'bg-white/5');
     aiColorB.classList.replace('text-white', 'text-white/60');
     aiColorB.classList.replace('border-emerald-500', 'border-transparent');
+  }
+
+  if (targetId === 'logout-btn') {
+    signOutUser().then(() => {
+      currentUser = null;
+      window.location.search = '';
+    }).catch(err => console.error(err));
+  }
+
+  if (targetId === 'create-public-btn') {
+    // We create a new game manually here to avoid reload
+    gameId = generateGameId();
+    playerColor = 'w';
+    localStorage.setItem(`chess_${gameId}`, playerColor);
+
+    const url = new URL(window.location);
+    url.searchParams.set('gameID', gameId);
+    window.history.replaceState({}, '', url);
+
+    createGame(gameId).then(() => {
+      const shareUrl = new URL(window.location.href.split('?')[0]);
+      shareUrl.searchParams.set('gameID', gameId);
+      shareUrl.searchParams.set('c', 'b');
+      shareLink.value = shareUrl.toString();
+      
+      gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
+      sendMove(gameId, '', gameStatus).catch(e => console.error(e));
+
+      shareBanner.classList.remove('hidden');
+      setTimeout(() => { shareBanner.style.transform = 'translateY(0)'; }, 50);
+
+      authView.classList.add('hidden');
+      lobbyView.classList.add('hidden');
+      gameView.classList.remove('hidden');
+
+      subscribeToGame(gameId, onRemoteUpdate);
+      draw();
+      updateUI();
+    }).catch(err => {
+      console.error('Failed to create public game:', err);
+      alert('Error creating game.');
+    });
+  }
+
+  if (targetId === 'lobby-play-ai-btn') {
+    aiModal.classList.remove('hidden');
+    aiModal.classList.add('flex');
+    selectedAIColor = 'w';
+    aiColorW.classList.replace('bg-white/5', 'bg-white/20');
+    aiColorW.classList.replace('text-white/60', 'text-white');
+    aiColorW.classList.replace('border-transparent', 'border-emerald-500');
+    aiColorB.classList.replace('bg-white/20', 'bg-white/5');
+    aiColorB.classList.replace('text-white', 'text-white/60');
+    aiColorB.classList.replace('border-emerald-500', 'border-transparent');
+  }
+
+  if (targetId === 'refresh-lobby-btn') {
+    refreshLobby();
+  }
+
+  const joinBtn = e.target.closest('button[data-join]');
+  if (joinBtn) {
+    const joinId = joinBtn.dataset.join;
+    window.location.search = `?gameID=${joinId}&c=b`;
   }
 
   if (targetId === 'cancel-ai-btn') {
