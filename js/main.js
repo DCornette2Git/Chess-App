@@ -1,5 +1,5 @@
 import { renderBoard, getCapturedPieces, getPieceSymbol } from './board.js?v=2.3';
-import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame, signUpUser, signInUser, signOutUser, getCurrentSession, fetchOpenGames } from './network.js?v=2.5';
+import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame, signUpUser, signInUser, signOutUser, getCurrentSession, fetchOpenGames, deleteGame, deleteAllOpenGames } from './network.js?v=2.6';
 
 // --- State ---
 let chess;
@@ -434,7 +434,12 @@ async function refreshLobby() {
             <div class="text-white font-medium text-sm">Host: ${hostName}</div>
             <div class="text-white/40 text-xs">Game ID: ${g.id}</div>
           </div>
-          <button data-join="${g.id}" class="bg-violet-600 hover:bg-violet-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer active:scale-95">Join Game</button>
+          <div class="flex items-center gap-2">
+            <button data-delete="${g.id}" class="text-white/40 hover:text-red-400 transition-colors p-1" title="Delete Game">
+              🗑️
+            </button>
+            <button data-join="${g.id}" class="bg-violet-600 hover:bg-violet-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer active:scale-95">Join Game</button>
+          </div>
         </div>
       `;
     }
@@ -822,6 +827,24 @@ document.addEventListener('click', (e) => {
   if (joinBtn) {
     const joinId = joinBtn.dataset.join;
     window.location.search = `?gameID=${joinId}&c=b`;
+  }
+
+  const deleteBtn = e.target.closest('button[data-delete]');
+  if (deleteBtn) {
+    const delId = deleteBtn.dataset.delete;
+    if (confirm('Delete this game?')) {
+      deleteGame(delId).then(() => {
+        refreshLobby();
+      }).catch(err => console.error(err));
+    }
+  }
+
+  if (targetId === 'clear-lobby-btn') {
+    if (confirm('Delete ALL open games in the lobby?')) {
+      deleteAllOpenGames().then(() => {
+        refreshLobby();
+      }).catch(err => console.error(err));
+    }
   }
 
   if (targetId === 'cancel-ai-btn') {

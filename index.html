@@ -318,9 +318,14 @@
         <div class="glass-panel p-6 border border-white/10 flex flex-col">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-bold text-white/90">Open Games</h2>
-            <button id="refresh-lobby-btn" class="text-xs text-white/50 hover:text-white transition-colors flex items-center gap-1">
-              🔄 Refresh
-            </button>
+            <div class="flex items-center gap-3">
+              <button id="clear-lobby-btn" class="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
+                🗑️ Clear All
+              </button>
+              <button id="refresh-lobby-btn" class="text-xs text-white/50 hover:text-white transition-colors flex items-center gap-1">
+                🔄 Refresh
+              </button>
+            </div>
           </div>
           <div id="open-games-list" class="flex-1 space-y-2 overflow-y-auto custom-scroll pr-2 min-h-[200px] max-h-[300px]">
             <p class="text-white/30 text-sm italic text-center mt-8">Loading games...</p>
@@ -331,6 +336,6 @@
   </div>
 
   <!-- App -->
-  <script type="module" src="js/main.js?v=2.8"></script>
+  <script type="module" src="js/main.js?v=2.10"></script>
 </body>
 </html>

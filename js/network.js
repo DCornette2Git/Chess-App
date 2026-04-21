@@ -107,3 +107,19 @@ export async function fetchOpenGames() {
   if (error && error.code !== 'PGRST116') throw error;
   return data || [];
 }
+
+export async function deleteGame(gameId) {
+  const { error } = await client
+    .from('games')
+    .delete()
+    .eq('id', gameId);
+  if (error) throw error;
+}
+
+export async function deleteAllOpenGames() {
+  const { error } = await client
+    .from('games')
+    .delete()
+    .like('status', 'waiting%');
+  if (error) throw error;
+}
