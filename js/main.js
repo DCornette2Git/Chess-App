@@ -1,10 +1,8 @@
 import { renderBoard, getCapturedPieces, getPieceSymbol } from './board.js?v=2.3';
-import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame, signUpUser, signInUser, signOutUser, getCurrentSession, fetchOpenGames, deleteGame, deleteAllOpenGames } from './network.js?v=2.6';
+import { initSupabase, createGame, fetchGame, sendMove, joinGame, subscribeToGame, fetchOpenGames, deleteGame, deleteAllOpenGames } from './network.js?v=2.6';
 
 // --- State ---
 let chess;
-let currentUser = null;
-let isLoginMode = true;
 let gameId = null;
 let playerColor = null;
 let selectedSquare = null;
@@ -17,16 +15,7 @@ let engine = null;
 let engineThinking = false;
 
 // --- DOM refs ---
-const gameView = document.getElementById('game-view');
-const authView = document.getElementById('auth-view');
-const authForm = document.getElementById('auth-form');
-const authUsername = document.getElementById('auth-username');
-const authPassword = document.getElementById('auth-password');
-const authToggleBtn = document.getElementById('auth-toggle-btn');
-const authSubmitBtn = document.getElementById('auth-submit-btn');
-const authError = document.getElementById('auth-error');
 const lobbyView = document.getElementById('lobby-view');
-const lobbyUsername = document.getElementById('lobby-username');
 const openGamesList = document.getElementById('open-games-list');
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('game-status');
@@ -407,11 +396,8 @@ function askEngine() {
 
 // --- Auth & Lobby Logic ---
 async function showLobby() {
-  authView.classList.add('hidden');
   gameView.classList.add('hidden');
   lobbyView.classList.remove('hidden');
-  
-  lobbyUsername.textContent = currentUser.user_metadata?.username || 'Player';
   await refreshLobby();
 }
 
@@ -464,41 +450,21 @@ async function init() {
     return;
   }
 
-  // Check auth
-  try {
-    const session = await getCurrentSession();
-    if (session) {
-      currentUser = session.user;
-    }
-  } catch (err) {
-    console.error('Session check failed', err);
-  }
-
-  // Parse URL
+  // Check if we have a gameId in the URL
   const params = new URLSearchParams(window.location.search);
-  
+  gameId = params.get('gameID');
+
   if (params.get('ai') === 'true') {
     isAIMode = true;
     aiLevel = parseInt(params.get('level')) || 10;
   }
-  
-  gameId = params.get('gameID');
 
-  if (!currentUser && !gameId) {
-    // Show Auth
-    authView.classList.remove('hidden');
-    gameView.classList.add('hidden');
-    return;
-  }
-
-  if (currentUser && !gameId) {
-    // Show Lobby
+  if (!gameId) {
     showLobby();
     return;
   }
 
-  // If we reach here, we have a gameId, so we show the game view
-  authView.classList.add('hidden');
+  // Show game view
   lobbyView.classList.add('hidden');
   gameView.classList.remove('hidden');
   
@@ -533,7 +499,7 @@ async function init() {
       startEngine();
       if (playerColor === 'b') askEngine();
     } else {
-      gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
+      gameStatus = 'waiting';
       // Sync waiting status
       try { await sendMove(gameId, '', gameStatus); } catch(e){}
     }
@@ -615,49 +581,6 @@ async function init() {
   updateUI();
 }
 
-// Auth Form Handler
-if (authForm) {
-  authForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const username = authUsername.value.trim();
-    const password = authPassword.value;
-    if (!username || !password) return;
-    
-    authSubmitBtn.disabled = true;
-    authSubmitBtn.textContent = 'Please wait...';
-    authError.classList.add('hidden');
-    
-    try {
-      if (isLoginMode) {
-        const data = await signInUser(username, password);
-        currentUser = data.user;
-      } else {
-        const data = await signUpUser(username, password);
-        currentUser = data.user;
-      }
-      showLobby();
-    } catch (err) {
-      authError.textContent = err.message || 'Authentication failed';
-      authError.classList.remove('hidden');
-    } finally {
-      authSubmitBtn.disabled = false;
-      authSubmitBtn.textContent = 'Play Now';
-    }
-  });
-}
-
-// Auth Toggle Handler
-if (authToggleBtn) {
-  authToggleBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    isLoginMode = !isLoginMode;
-    authToggleBtn.innerHTML = isLoginMode 
-      ? 'Need an account? <span class="text-violet-400">Register</span>'
-      : 'Already have an account? <span class="text-violet-400">Login</span>';
-    authSubmitBtn.textContent = 'Play Now';
-    authError.classList.add('hidden');
-  });
-}
 
 // --- Event listeners (Global Delegate for robustness) ---
 document.addEventListener('click', (e) => {
@@ -773,12 +696,6 @@ document.addEventListener('click', (e) => {
     aiColorB.classList.replace('border-emerald-500', 'border-transparent');
   }
 
-  if (targetId === 'logout-btn') {
-    signOutUser().then(() => {
-      currentUser = null;
-      window.location.search = '';
-    }).catch(err => console.error(err));
-  }
 
   if (targetId === 'create-public-btn') {
     // We create a new game manually here to avoid reload
@@ -791,10 +708,9 @@ document.addEventListener('click', (e) => {
     window.history.replaceState({}, '', url);
 
     createGame(gameId).then(() => {
-      gameStatus = currentUser ? `waiting:${currentUser.user_metadata?.username || 'Player'}` : 'waiting';
+      gameStatus = 'waiting';
       sendMove(gameId, '', gameStatus).catch(e => console.error(e));
 
-      authView.classList.add('hidden');
       lobbyView.classList.add('hidden');
       gameView.classList.remove('hidden');
 
