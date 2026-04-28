@@ -15,6 +15,7 @@ let engine = null;
 let engineThinking = false;
 
 // --- DOM refs ---
+const gameView = document.getElementById('game-view');
 const lobbyView = document.getElementById('lobby-view');
 const openGamesList = document.getElementById('open-games-list');
 const boardEl = document.getElementById('board');
@@ -445,12 +446,11 @@ async function init() {
     initSupabase();
   } catch (err) {
     console.error('Supabase init failed:', err);
-    authError.textContent = 'Set your Supabase URL & key in js/config.js';
-    authError.classList.remove('hidden');
+    alert('Failed to initialize Supabase. Please check your config.js.');
     return;
   }
 
-  // Check if we have a gameId in the URL
+  // Parse URL params
   const params = new URLSearchParams(window.location.search);
   gameId = params.get('gameID');
 
@@ -459,26 +459,12 @@ async function init() {
     aiLevel = parseInt(params.get('level')) || 10;
   }
 
-  if (!gameId) {
-    showLobby();
-    return;
-  }
-
-  // Show game view
-  lobbyView.classList.add('hidden');
-  gameView.classList.remove('hidden');
-  
-  playerColor = 'w';
-  draw();
-  updateUI();
-
-  if (!gameId) {
-    // --- Create new game ---
+  // --- Case 0: AI mode with no gameId → auto-generate one ---
+  if (!gameId && isAIMode) {
     gameId = generateGameId();
-    playerColor = isAIMode ? (params.get('c') === 'b' ? 'b' : 'w') : 'w';
+    playerColor = params.get('c') === 'b' ? 'b' : 'w';
     localStorage.setItem(`chess_${gameId}`, playerColor);
 
-    // Update URL without reload
     const url = new URL(window.location);
     url.searchParams.set('gameID', gameId);
     window.history.replaceState({}, '', url);
@@ -486,100 +472,130 @@ async function init() {
     try {
       await createGame(gameId);
     } catch (err) {
-      console.error('Failed to create game:', err);
-      statusEl.textContent = 'Error creating game. Check Supabase config.';
-      statusEl.className = 'text-sm font-semibold text-red-400';
-      draw();
-      updateUI();
-      return;
+      console.error('Failed to create AI game:', err);
     }
 
-    if (isAIMode) {
-      gameStatus = 'active'; // In AI mode we don't wait for opponent
-      startEngine();
-      if (playerColor === 'b') askEngine();
-    } else {
-      gameStatus = 'waiting';
-      // Sync waiting status
-      try { await sendMove(gameId, '', gameStatus); } catch(e){}
-    }
-  } else {
-    // --- Join existing game ---
-    const savedColor = localStorage.getItem(`chess_${gameId}`);
+    gameStatus = 'active';
+    startEngine();
 
-    let game;
+    lobbyView.classList.add('hidden');
+    gameView.classList.remove('hidden');
+
+    subscribeToGame(gameId, onRemoteUpdate);
+
+    if (chess.turn() !== playerColor) {
+      askEngine();
+    }
+
+    draw();
+    updateUI();
+    return;
+  }
+
+  // --- Case 1: No gameId → show lobby ---
+  if (!gameId) {
+    showLobby();
+    return;
+  }
+
+  // --- Case 2: gameId exists → join or resume ---
+  lobbyView.classList.add('hidden');
+  gameView.classList.remove('hidden');
+
+  const savedColor = localStorage.getItem(`chess_${gameId}`);
+
+  let game;
+  try {
+    game = await fetchGame(gameId);
+  } catch (err) {
+    console.error('Failed to fetch game:', err);
+    statusEl.textContent = 'Error loading game.';
+    statusEl.className = 'text-sm font-semibold text-red-400';
+    draw();
+    updateUI();
+    return;
+  }
+
+  if (!game) {
+    // No existing game record; create a new game as host
     try {
-      game = await fetchGame(gameId);
+      await createGame(gameId);
     } catch (err) {
-      console.error('Failed to fetch game:', err);
-      statusEl.textContent = 'Error loading game.';
+      console.error('Failed to create new game:', err);
+      statusEl.textContent = 'Error creating game.';
       statusEl.className = 'text-sm font-semibold text-red-400';
       draw();
       updateUI();
       return;
     }
+    // Default to white unless a color param is provided
+    playerColor = params.get('c') === 'b' ? 'b' : 'w';
+    localStorage.setItem(`chess_${gameId}`, playerColor);
+    gameStatus = 'waiting';
+    // Subscribe to realtime updates and render
+    subscribeToGame(gameId, onRemoteUpdate);
+    draw();
+    updateUI();
+    return;
+  }
 
-    if (!game) {
-      statusEl.textContent = 'Game not found.';
-      statusEl.className = 'text-sm font-semibold text-red-400';
-      draw();
-      updateUI();
-      return;
+  if (savedColor) {
+    // Returning player
+    playerColor = savedColor;
+    if (isAIMode) startEngine();
+  } else if (!isAIMode && game.status && game.status.startsWith('waiting')) {
+    // Fresh joiner
+    playerColor = params.get('c') === 'w' ? 'w' : 'b';
+    localStorage.setItem(`chess_${gameId}`, playerColor);
+    try {
+      await joinGame(gameId);
+    } catch (err) {
+      console.error('Failed to join game:', err);
     }
-
-    if (savedColor) {
-      playerColor = savedColor;
-      if (isAIMode) startEngine();
-    } else if (!isAIMode && game.status.startsWith('waiting')) {
+    gameStatus = 'active';
+  } else if (!isAIMode) {
+    // Game in progress — allow late join if few moves
+    const moveCount = (game.moves || '').split('|').filter(m => m).length;
+    if (moveCount <= 1) {
       playerColor = params.get('c') === 'w' ? 'w' : 'b';
       localStorage.setItem(`chess_${gameId}`, playerColor);
-      try {
-        await joinGame(gameId);
-      } catch (err) {
-        console.error('Failed to join game:', err);
-      }
+      try { await joinGame(gameId); } catch (err) { console.error(err); }
       gameStatus = 'active';
-    } else if (!isAIMode) {
-      // If status is active but no moves made yet, allow joining
-      const moveCount = (game.moves || '').split('|').filter(m => m).length;
-      if (moveCount === 0 || moveCount === 1) {
-        // Handles the case where white already moved but black is just now clicking the link
-        playerColor = params.get('c') === 'w' ? 'w' : 'b';
-        localStorage.setItem(`chess_${gameId}`, playerColor);
-        try {
-          await joinGame(gameId);
-        } catch (err) {
-          console.error('Failed to join game:', err);
-        }
-        gameStatus = 'active';
-      } else {
-        // Game in progress — default to black (read-only, cannot move)
-        playerColor = 'b';
-      }
-    }
-
-    gameStatus = game.status;
-
-    // Replay moves
-    if (game.moves) {
-      const moves = game.moves.split('|').filter(m => m);
-      for (const uci of moves) {
-        const from = uci.substring(0, 2);
-        const to = uci.substring(2, 4);
-        const promotion = uci.length > 4 ? uci[4] : undefined;
-        const move = chess.move({ from, to, promotion });
-        if (move) lastMove = { from: move.from, to: move.to };
-      }
+    } else {
+      playerColor = 'b'; // spectate / read-only
     }
   }
 
-  // Subscribe to realtime
+  gameStatus = game.status || 'waiting';
+
+  // Replay moves from DB
+  if (game.moves) {
+    const moves = game.moves.split('|').filter(m => m);
+    for (const uci of moves) {
+      const from = uci.substring(0, 2);
+      const to = uci.substring(2, 4);
+      const promotion = uci.length > 4 ? uci[4] : undefined;
+      const move = chess.move({ from, to, promotion });
+      if (move) lastMove = { from: move.from, to: move.to };
+    }
+  }
+
+  // AI mode setup
+  if (isAIMode) {
+    gameStatus = 'active';
+    startEngine();
+
+    if (playerColor !== chess.turn()) askEngine();
+  }
+
+  // Subscribe to realtime updates
   subscribeToGame(gameId, onRemoteUpdate);
 
-  // Re-render with final state
+  // Final render
   draw();
   updateUI();
 }
+
 
 
 // --- Event listeners (Global Delegate for robustness) ---

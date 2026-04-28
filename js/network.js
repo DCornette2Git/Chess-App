@@ -4,7 +4,11 @@ let client = null;
 let channel = null;
 
 export function initSupabase() {
-  client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: false
+    }
+  });
 }
 
 export async function createGame(gameId) {
